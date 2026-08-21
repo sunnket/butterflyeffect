@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Butterfly Effect — Verdant Hollow</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦋</text></svg>" />
+</head>
+<body>
+
+<!-- ══════════════════ STAGE ══════════════════ -->
+<div id="stageWrap">
+  <canvas id="stage"></canvas>
+  <div id="compass" title="North">
+    <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21"/><path d="M24 7 L29 25 L24 21 L19 25 Z"/><text x="24" y="42">N</text></svg>
+  </div>
+  <div id="scaleBar"><span id="scaleLabel">200 m</span></div>
+  <div id="zoomHint">scroll to zoom · drag to pan · hover a structure · click to inspect</div>
+</div>
+
+<!-- ══════════════════ TOP BAR ══════════════════ -->
+<header id="topbar">
+  <div class="brand">
+    <div class="bfly">🦋</div>
+    <div class="brandtext">
+      <h1>Butterfly&nbsp;Effect</h1>
+      <span id="townName">Verdant Hollow</span>
+    </div>
+  </div>
+
+  <div class="clockbox">
+    <div class="clockdial"><canvas id="sundial" width="76" height="76"></canvas></div>
+    <div class="clocktext">
+      <strong id="clockTime">06:00</strong>
+      <span id="clockDay">Day 1 · Spring</span>
+    </div>
+  </div>
+
+  <div id="weatherChip" class="wchip">
+    <span class="wicon" id="wIcon">⛅</span>
+    <div class="wmeta">
+      <strong id="wLabel">Partly cloudy</strong>
+      <span id="wSub">12 km/h NE · 22°C</span>
+    </div>
+  </div>
+
+  <div id="metrics" class="metrics"><!-- injected --></div>
+
+  <div class="transport">
+    <button class="tbtn" id="btnPlay" title="Play / Pause  (Space)"><span class="ico">⏸</span></button>
+    <div class="speeds" id="speeds">
+      <button data-sp="1" class="on">1×</button>
+      <button data-sp="3">3×</button>
+      <button data-sp="8">8×</button>
+    </div>
+    <button class="tbtn" id="btnReset" title="Restart simulation  (R)"><span class="ico">⟲</span></button>
+  </div>
+</header>
+
+<!-- ══════════════════ LEFT RAIL ══════════════════ -->
+<aside id="rail">
+  <div class="panel">
+    <div class="phead"><h2>Scenarios</h2><span class="hint">click to unleash</span></div>
+    <div id="scenarioList" class="scenarios"><!-- injected --></div>
+    <button id="btnCalm" class="calmbtn">Restore calm weather</button>
+  </div>
+
+  <div class="panel">
+    <div class="phead"><h2>Overlays</h2><span class="hint">L</span></div>
+    <div id="layerList" class="layers"><!-- injected --></div>
+  </div>
+
+  <div class="panel legend">
+    <div class="phead"><h2>Systems</h2></div>
+    <ul id="legendList"><!-- injected --></ul>
+  </div>
+</aside>
+
+<!-- ══════════════════ RIGHT INSPECTOR ══════════════════ -->
+<aside id="inspector" class="closed">
+  <button id="btnCloseInspect" title="Close">✕</button>
+  <div id="inspectBody"></div>
+</aside>
+
+<!-- ══════════════════ BOTTOM DOCK ══════════════════ -->
+<footer id="dock">
+  <div class="charts" id="charts"><!-- injected --></div>
+  <div class="logwrap">
+    <div class="phead"><h2>Cause &amp; effect log</h2><span class="hint" id="logCount">0 events</span></div>
+    <ul id="eventLog"></ul>
+  </div>
+</footer>
+
+<!-- ══════════════════ TOOLTIP ══════════════════ -->
+<div id="tip" class="tip hidden"></div>
+
+<!-- ══════════════════ INTRO ══════════════════ -->
+<div id="intro">
+  <div class="introcard">
+    <div class="introglyph">🦋</div>
+    <h2>Verdant Hollow</h2>
+    <p class="lede">A valley town where <em>nothing</em> stands alone. Rain fills the dam, the dam spins the turbine,
+      the turbine powers the pumps, the pumps water the fields, the fields feed the town, the town breathes the air
+      the forest cleans — and the forest only grows because it rained.</p>
+    <div class="introgrid">
+      <div><strong>Hover</strong><span>live readings + a forecast of what collapses if you switch it off</span></div>
+      <div><strong>Click</strong><span>open the full dependency dossier for any structure</span></div>
+      <div><strong>Toggle</strong><span>kill a system and watch the ripple travel the network</span></div>
+      <div><strong>Scenarios</strong><span>drought, monsoon, wildfire, boom — perturb the initial conditions</span></div>
+    </div>
+    <button id="btnStart">Enter the valley</button>
+    <div class="introfoot">scroll = zoom · drag = pan · space = pause · L = overlays · G = link graph</div>
+  </div>
+</div>
+
+<script src="js/noise.js"></script>
+<script src="js/world.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/scenarios.js"></script>
+<script src="js/agents.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
