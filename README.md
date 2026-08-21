@@ -31,7 +31,29 @@ then open <http://localhost:5173>.
 | **Scroll / drag** | Zoom and pan. Detail fades in with zoom; district labels fade in when you pull back |
 | **Scenarios** (`1`–`9`) | Monsoon, drought, heatwave, gale, windless week, industrial boom, population surge, substation fault, mass planting, clear-felling |
 | **Overlays** | `G` dependency graph · `W` wind field · `H` heat island · `A` air-quality haze · `P` townsfolk · `B` labels |
+| **`L`** | Collapse the side panels and hand the whole screen to the valley |
 | **Transport** | `Space` pause · `R` restart · `F` fit · `+`/`-` zoom · `Esc` close panel |
+
+## You read the town, not a dashboard
+
+The HUD is deliberately thin — four vitals and a clock. Everything else is meant to be seen
+happening:
+
+- **Systems in trouble wear a badge** above them on the map — `OFF`, `PWR`, `H2O`, `FIRE`,
+  `CROP`, `TANK`, `HAZE` — pulsing, with a stem down to the building.
+- **A quarter that loses power goes cold and grey**, in daylight as well as at night, and its
+  windows go dark.
+- **Gardens brown and shrink** when the taps run dry; crops yellow when the canal shuts.
+- **Chimneys smoke** when the temperature drops, **dust lifts** off bare ground in a drought,
+  **haze thickens** as the air gets worse, and the birds stop flying over a burning valley.
+- Events arrive as **transient toasts** that fade, rather than accumulating in a table.
+
+![the same town with the substation off](docs/failure.jpg)
+*The same streets with the substation switched off: badges on every affected system, the quarter
+gone cold and grey, gardens browning.*
+
+Night is moonlight, not a power cut: the town stays readable after dark, and the substation
+fault fades the grid down over an hour rather than snapping it to zero.
 
 ## The important bit: the forecasts are real
 
@@ -99,6 +121,10 @@ Footprints are arbitrary quads, so the generated buildings face the street they 
 - **Level of detail** — glazing, chimneys, ridge lines, street furniture and tree tiers each switch
   on at their own zoom threshold; the forest is underlaid with a soft canopy mass at map scale that
   shrinks as the canopy is lost, so deforestation is legible from across the valley.
+- **Performance** — the road network, streets and railway are baked into the terrain image rather
+  than stroked every frame; buildings, props and trees are y-sorted and binary-searched to the
+  visible band; shadows are filled in chunks of 16 because Canvas path building is superlinear in
+  subpath count. Frame cost went from ~146 ms to ~13 ms at the worst zoom.
 
 ## Files
 

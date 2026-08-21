@@ -611,9 +611,9 @@
         });
       }
     }
-    scatter(forestBlobs, 7600, 'forest', 0.02, ['pine','pine','pine','round','poplar'], 9, 19);
-    scatter(riparian,     440, 'forest', 0.0,  ['willow','round'], 10, 18);
-    scatter(parkBlobs,    280, 'park',   0.0,  ['round','round','poplar'], 12, 22);
+    scatter(forestBlobs, 4600, 'forest', 0.02, ['pine','pine','pine','round','poplar'], 13, 26);
+    scatter(riparian,     260, 'forest', 0.0,  ['willow','round'], 13, 23);
+    scatter(parkBlobs,    170, 'park',   0.0,  ['round','round','poplar'], 15, 26);
 
     const orng = makeRNG(4242);
     for (let r = 0; r < 11; r++) for (let c = 0; c < 13; c++) {
@@ -625,7 +625,7 @@
     }
 
     const hrng = makeRNG(717);
-    for (let i = 0; i < 380; i++) {
+    for (let i = 0; i < 240; i++) {
       const x = 1900 + hrng() * 2300, y = 2440 + hrng() * 820;
       if (riverDistF(x, y) < 40 || roadDistF(x, y) < 26) continue;
       if (x > 3760 && y > 2600 && y < 2960) continue;
@@ -690,6 +690,17 @@
 
   W.buildings.sort((a, b) => a.y - b.y);
   W.props.sort((a, b) => a.y - b.y);
+
+  // chimney stack positions, so the houses can smoke in cold weather
+  W.chimneys = W.buildings.filter(b => b.chimney)
+    .map(b => ({ x: b.x, y: b.y, z: b.h + (b.roofH || 0) + 9, owner: b.owner }));
+
+  /** First index whose y >= v, in a y-sorted array. */
+  W.lowerBound = function (arr, v) {
+    let lo = 0, hi = arr.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m].y < v) lo = m + 1; else hi = m; }
+    return lo;
+  };
 
   global.WORLD = W;
 })(window);

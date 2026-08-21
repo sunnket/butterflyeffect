@@ -59,21 +59,17 @@
 </header>
 
 <!-- ══════════════════ LEFT RAIL ══════════════════ -->
+<button id="railToggle" title="Panels (L)"><span></span><span></span><span></span></button>
 <aside id="rail">
   <div class="panel">
-    <div class="phead"><h2>Scenarios</h2><span class="hint">click to unleash</span></div>
+    <div class="phead"><h2>Scenarios</h2></div>
     <div id="scenarioList" class="scenarios"><!-- injected --></div>
-    <button id="btnCalm" class="calmbtn">Restore calm weather</button>
+    <button id="btnCalm" class="calmbtn">Restore calm</button>
   </div>
 
   <div class="panel">
-    <div class="phead"><h2>Overlays</h2><span class="hint">L</span></div>
+    <div class="phead"><h2>Overlays</h2></div>
     <div id="layerList" class="layers"><!-- injected --></div>
-  </div>
-
-  <div class="panel legend">
-    <div class="phead"><h2>Systems</h2></div>
-    <ul id="legendList"><!-- injected --></ul>
   </div>
 </aside>
 
@@ -83,14 +79,8 @@
   <div id="inspectBody"></div>
 </aside>
 
-<!-- ══════════════════ BOTTOM DOCK ══════════════════ -->
-<footer id="dock">
-  <div class="charts" id="charts"><!-- injected --></div>
-  <div class="logwrap">
-    <div class="phead"><h2>Cause &amp; effect log</h2><span class="hint" id="logCount">0 events</span></div>
-    <ul id="eventLog"></ul>
-  </div>
-</footer>
+<!-- ══════════════════ EVENT TOASTS ══════════════════ -->
+<div id="toasts"></div>
 
 <!-- ══════════════════ TOOLTIP ══════════════════ -->
 <div id="tip" class="tip hidden"></div>

@@ -52,6 +52,7 @@
       skill: 0.70,
       health: 78, econ: 62, happy: 70, pop: POP0,
       reliab: 1,
+      gridHealth: 1, gridTarget: 1,   // busbar condition, ramps instead of snapping
       fire: 0, fireCool: 0,
       floodRisk: 0,
       d: {}              // derived readouts, rebuilt every step
@@ -217,7 +218,9 @@
     // spinning reserve than it needs — which the valley pays for in particulates
     const coalMW = on.coal ? clamp(gap * (on.weather ? 1.0 : 1.12), 0, COAL_CAP) : 0;
     const supply = renew + coalMW;
-    const served = on.grid ? clamp01(supply / demand) : 0;
+    // a fault takes the busbars down over minutes, not instantly
+    S.gridHealth = approach(S.gridHealth, S.gridTarget === undefined ? 1 : S.gridTarget, 1.6, dt);
+    const served = on.grid ? clamp01(supply / demand) * S.gridHealth : 0;
     const deficit = 1 - served;
     D.deficitPrev = deficit;
     S.reliab = approach(S.reliab, served, 0.5, dt);

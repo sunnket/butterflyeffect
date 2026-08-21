@@ -44,13 +44,13 @@
 
   const A = {
     people: [], cars: [], tram: null, train: null,
-    smoke: [], spray: [], embers: [], birds: [], leaves: [],
+    smoke: [], spray: [], embers: [], birds: [], leaves: [], dust: [],
 
     init() {
       this.people = []; this.cars = []; this.smoke = []; this.spray = [];
-      this.embers = []; this.birds = []; this.leaves = [];
+      this.embers = []; this.birds = []; this.leaves = []; this.dust = [];
 
-      for (let i = 0; i < 340; i++) {
+      for (let i = 0; i < 220; i++) {
         const r = roadById[WALKABLE[(rng() * WALKABLE.length) | 0]];
         this.people.push({
           road: r, s: rng() * r.total, dir: rng() < .5 ? 1 : -1,
@@ -60,7 +60,7 @@
           bag: rng() < .22, idle: 0, active: true
         });
       }
-      for (let i = 0; i < 76; i++) {
+      for (let i = 0; i < 54; i++) {
         const r = roadById[DRIVABLE[(rng() * DRIVABLE.length) | 0]];
         this.cars.push({
           road: r, s: rng() * r.total, dir: rng() < .5 ? 1 : -1,
@@ -71,7 +71,7 @@
       this.tram  = { road: roadById.ring, s: 0, dir: 1, speed: 46 };
       this.train = { s: 0, dir: 1, speed: 150, x: 0, y: 0, ang: 0, dwell: 0 };
 
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 26; i++) {
         this.birds.push({ x: 400 + rng() * 1400, y: 500 + rng() * 1600, ph: rng() * TAU,
                           z: 70 + rng() * 120, sp: 22 + rng() * 20, vis: 1 });
       }
@@ -84,7 +84,7 @@
       const night = D.isNight;
 
       /* ── townsfolk ── */
-      const wantPeople = clamp(Math.round((S.pop / 11800) * 220 * (night ? 0.26 : 1)
+      const wantPeople = clamp(Math.round((S.pop / 11800) * 150 * (night ? 0.26 : 1)
                           * (0.45 + 0.55 * clamp01(S.happy / 80))
                           * (S.aqi > 190 ? 0.45 : 1) * (S.rain > 0.5 ? 0.55 : 1)), 6, this.people.length);
       const pace = 0.7 + 0.5 * clamp01(S.happy / 90) + (S.rain > 0.4 ? 0.5 : 0);
@@ -103,7 +103,7 @@
       }
 
       /* ── traffic: fewer cars when the tram runs, more when it doesn't ── */
-      const wantCars = clamp(Math.round(D.traffic * 70 * (night ? 0.35 : 1)), 3, this.cars.length);
+      const wantCars = clamp(Math.round(D.traffic * 52 * (night ? 0.35 : 1)), 3, this.cars.length);
       for (let i = 0; i < this.cars.length; i++) {
         const c = this.cars[i];
         c.active = i < wantCars;
@@ -183,6 +183,32 @@
         e.z += 1.2 * m; e.life -= 0.02 * m;
         if (e.life <= 0) this.embers.splice(i, 1);
       }
+
+      /* ── hearth smoke: you can see the town is cold ── */
+      if (S.temp < 13 && W.chimneys.length) {
+        const cold = clamp01((13 - S.temp) / 14);
+        for (let k = 0; k < 3; k++) {
+          if (rng() > cold * 0.5 * m) continue;
+          const ch = W.chimneys[(rng() * W.chimneys.length) | 0];
+          if (ch.owner && !S.on[ch.owner]) continue;
+          this.smoke.push({ x: ch.x, y: ch.y, z: ch.z, vx: (rng()-.5)*.3, vy: (rng()-.5)*.3,
+                            r: 3 + rng() * 3, life: 1, tint: 'hearth' });
+        }
+      }
+
+      /* ── dust lifted off bare, dry ground ── */
+      const dusty = clamp01((0.34 - S.soil) * 3.4) * clamp01(S.wind * 1.6);
+      if (dusty > 0.05 && rng() < dusty * 1.4 * m) {
+        this.dust.push({ x: 2200 + rng() * 2100, y: 2500 + rng() * 800,
+                         z: 4, life: 1, r: 14 + rng() * 26 });
+      }
+      for (let i = this.dust.length - 1; i >= 0; i--) {
+        const d = this.dust[i];
+        d.x += wx * 2.6 * m; d.y += wy * 2.6 * m;
+        d.z += 0.8 * m; d.r += 0.7 * m; d.life -= 0.012 * m;
+        if (d.life <= 0) this.dust.splice(i, 1);
+      }
+      if (this.dust.length > 90) this.dust.splice(0, this.dust.length - 90);
 
       /* ── spillway & tailrace spray ── */
       const spillA = (D.spill > 0.5 ? 1 : 0) + clamp01(D.release / 30) * 0.55 + (S.on.dam ? 0 : 0.8);

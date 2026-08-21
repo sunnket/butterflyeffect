@@ -149,16 +149,45 @@
       W.buildings.forEach(b => {
         octx.beginPath(); octx.ellipse(b.x, b.y + 6, b.w * 1.5, b.d * 1.5, 0, 0, TAU); octx.fill();
       });
-      octx.globalAlpha = 0.26; octx.strokeStyle = '#4a4436'; octx.lineCap = 'round';
-      W.roads.forEach(r => {
-        octx.lineWidth = r.w * 2.1;
-        octx.beginPath(); r.smooth.forEach((p, k) => k ? octx.lineTo(p[0], p[1]) : octx.moveTo(p[0], p[1]));
+      // The road network never moves, so it is baked in rather than stroked
+      // every frame — that alone was several hundred path ops per frame.
+      octx.globalAlpha = 1; octx.lineCap = 'round'; octx.lineJoin = 'round';
+      const lay = (pts, wd, col) => {
+        octx.lineWidth = wd; octx.strokeStyle = col;
+        octx.beginPath(); pts.forEach((p, k) => k ? octx.lineTo(p[0], p[1]) : octx.moveTo(p[0], p[1]));
         octx.stroke();
-      });
-      octx.globalAlpha = 0.18; octx.lineWidth = 16;
+      };
+      octx.globalAlpha = 0.5;
+      W.streets.forEach(st => lay([st.a, st.b], 19, '#3d3931'));
+      octx.globalAlpha = 1;
+      W.streets.forEach(st => lay([st.a, st.b], 15, '#57534a'));
+      W.roads.forEach(r => lay(r.smooth, r.w + 8, 'rgba(40,36,29,0.55)'));
+      W.roads.forEach(r => lay(r.smooth, r.w, '#514c43'));
+      octx.setLineDash([14, 19]); octx.globalAlpha = 0.30;
+      W.roads.forEach(r => { if (r.w > 14) lay(r.smooth, 1.8, '#d3cbb4'); });
+      octx.setLineDash([]); octx.globalAlpha = 1;
+      // railway
+      lay(W.smoothRail, 20, 'rgba(84,76,62,0.85)');
+      octx.strokeStyle = 'rgba(58,50,42,0.9)'; octx.lineWidth = 3;
       octx.beginPath();
-      W.streets.forEach(s => { octx.moveTo(s.a[0], s.a[1]); octx.lineTo(s.b[0], s.b[1]); });
+      for (let i = 2; i < W.smoothRail.length; i += 2) {
+        const a = W.smoothRail[i-1], b = W.smoothRail[i];
+        const an = Math.atan2(b[1]-a[1], b[0]-a[0]);
+        const nx = -Math.sin(an)*8, ny = Math.cos(an)*8;
+        octx.moveTo(b[0]-nx, b[1]-ny); octx.lineTo(b[0]+nx, b[1]+ny);
+      }
       octx.stroke();
+      octx.strokeStyle = 'rgba(158,156,150,0.8)'; octx.lineWidth = 1.8;
+      for (const off of [-5, 5]) {
+        octx.beginPath();
+        W.smoothRail.forEach((p, i) => {
+          const q = W.smoothRail[Math.min(i+1, W.smoothRail.length-1)];
+          const an = Math.atan2(q[1]-p[1], q[0]-p[0]);
+          const x = p[0] - Math.sin(an)*off, y = p[1] + Math.cos(an)*off;
+          i ? octx.lineTo(x, y) : octx.moveTo(x, y);
+        });
+        octx.stroke();
+      }
       octx.restore();
 
       this.terrain = off;
@@ -236,9 +265,6 @@
       drawCanal(ctx, S, this.time);
       drawFields(ctx, S, this.time, V, z);
       drawCanopyMass(ctx, S, z);
-      drawStreets(ctx, z, V);
-      drawRoads(ctx, z);
-      drawRail(ctx, z);
 
       /* ── depth-sorted solids ── */
       const D = this.drawables; D.length = 0;
@@ -299,6 +325,7 @@
       if (this.layers.heat) drawHeat(ctx, S);
       if (this.layers.links) drawLinks(ctx, S, this.time, this);
       if (SIM.ripple) drawRipple(ctx, S);
+      drawAlerts(ctx, S, this, z);
       drawSelection(ctx, this);
       if (this.layers.labels) drawLabels(ctx, S, this, z);
 
@@ -328,8 +355,9 @@
     const day = clamp01(dawn * dusk);
     const golden = clamp01(Math.max(smoothstep(5.2, 6.6, h) * (1 - smoothstep(6.6, 8.4, h)),
                                     smoothstep(16.4, 18.2, h) * (1 - smoothstep(18.2, 19.6, h))));
-    let tint = '48,64,124', tintA = (1 - day) * 0.66;
-    if (golden > 0.05 && day > 0.15) { tint = '255,176,120'; tintA = Math.max(tintA, golden * 0.26); }
+    // Night is moonlight, not a power cut — the town has to stay readable.
+    let tint = '92,112,168', tintA = (1 - day) * 0.40;
+    if (golden > 0.05 && day > 0.15) { tint = '255,176,120'; tintA = Math.max(tintA, golden * 0.24); }
     return {
       day, golden, night: 1 - day,
       off0: dim('#141b28', 0.55 + day * 0.55),
@@ -674,59 +702,6 @@
     });
   }
 
-  function drawStreets(ctx, z, V) {
-    if (z < 0.22) return;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#57534a'; ctx.lineWidth = 15;
-    ctx.beginPath();
-    for (const s of W.streets) {
-      if ((s.a[0] < V.x0 && s.b[0] < V.x0) || (s.a[0] > V.x1 && s.b[0] > V.x1)) continue;
-      if ((s.a[1] < V.y0 && s.b[1] < V.y0) || (s.a[1] > V.y1 && s.b[1] > V.y1)) continue;
-      ctx.moveTo(s.a[0], s.a[1]); ctx.lineTo(s.b[0], s.b[1]);
-    }
-    ctx.stroke();
-    if (z > 0.6) { ctx.strokeStyle = 'rgba(180,174,158,0.16)'; ctx.lineWidth = 1; ctx.stroke(); }
-  }
-
-  function drawRoads(ctx, z) {
-    W.roads.forEach(r => {
-      strokePath(ctx, r.smooth, r.w + 7, 'rgba(44,40,32,0.42)');
-      strokePath(ctx, r.smooth, r.w, '#514c43');
-      if (z > 0.45) {
-        ctx.save(); ctx.globalAlpha = 0.32;
-        ctx.setLineDash([13, 18]);
-        strokePath(ctx, r.smooth, 1.5, '#d3cbb4');
-        ctx.setLineDash([]); ctx.restore();
-      }
-    });
-  }
-
-  function drawRail(ctx, z) {
-    strokePath(ctx, W.smoothRail, 20, 'rgba(88,80,66,0.7)');
-    if (z > 0.35) {
-      ctx.strokeStyle = 'rgba(58,50,42,0.85)'; ctx.lineWidth = 3;
-      ctx.beginPath();
-      for (let i = 2; i < W.smoothRail.length; i += 2) {
-        const a = W.smoothRail[i-1], b = W.smoothRail[i];
-        const ang = Math.atan2(b[1]-a[1], b[0]-a[0]);
-        const nx = -Math.sin(ang)*8, ny = Math.cos(ang)*8;
-        ctx.moveTo(b[0]-nx, b[1]-ny); ctx.lineTo(b[0]+nx, b[1]+ny);
-      }
-      ctx.stroke();
-    }
-    ctx.strokeStyle = 'rgba(150,148,142,0.75)'; ctx.lineWidth = 1.6;
-    for (const off of [-5, 5]) {
-      ctx.beginPath();
-      W.smoothRail.forEach((p, i) => {
-        const q = W.smoothRail[Math.min(i+1, W.smoothRail.length-1)];
-        const ang = Math.atan2(q[1]-p[1], q[0]-p[0]);
-        const x = p[0] - Math.sin(ang)*off, y = p[1] + Math.cos(ang)*off;
-        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-      });
-      ctx.stroke();
-    }
-  }
-
   function drawBurnScar(ctx, S) {
     if (S.fire <= 0.005) return;
     ctx.save();
@@ -768,9 +743,10 @@
     const sway = S.wind * 3.6;
     const step = z < 0.24 ? 6 : z < 0.32 ? 4 : z < 0.52 ? 2 : 1;
     const sun = R.sun;
-    for (let i = 0; i < W.trees.length; i += step) {
+    const lo = W.lowerBound(W.trees, V.y0), hi = W.lowerBound(W.trees, V.y1);
+    for (let i = lo; i < hi; i += step) {
       const tr = W.trees[i];
-      if (tr.x < V.x0 || tr.x > V.x1 || tr.y < V.y0 || tr.y > V.y1) continue;
+      if (tr.x < V.x0 || tr.x > V.x1) continue;
       let alive = true;
       if (tr.group === 'park') alive = S.on.park;
       else if (tr.group === 'orchard') alive = S.on.orchard;
@@ -865,17 +841,27 @@
   function collectBuildings(D, S, V, z, SH) {
     const night = S.d.isNight;
     const lit = night ? clamp01(S.d.served * 1.1) * 0.72 : 0;
+    // a quarter that has lost power or water reads cold and grey on the map
+    const dead = clamp01(1 - S.d.served * 1.25);
+    const parched = clamp01(1 - S.d.waterCover * 1.3);
     const detail = z > 0.70;
     const tiny = z < 0.34;
     const sun = R.sun;
-    for (const b of W.buildings) {
+    const blo = W.lowerBound(W.buildings, V.y0 - 60), bhi = W.lowerBound(W.buildings, V.y1 + 60);
+    for (let bi = blo; bi < bhi; bi++) {
+      const b = W.buildings[bi];
       if (b.owner && !S.on[b.owner]) continue;
-      if (b.x + b.w < V.x0 || b.x - b.w > V.x1 || b.y + b.d < V.y0 || b.y - b.d - b.h > V.y1) continue;
+      if (b.x + b.w < V.x0 || b.x - b.w > V.x1) continue;
       const pts = quadOf(b.x, b.y, b.w, b.d, b.rot);
       if (!tiny) SH.push((ctx) => shadowPath(ctx, pts, b.h + (b.roofH || 0) * 0.6, sun, !detail));
       D.push({ y: b.y, f: (ctx) => {
+        const basePal = PALETTES[b.pal] || PALETTES.render;
+        const pal = dead > 0.04
+          ? { wall: mixRGB(basePal.wall, [104, 116, 138], dead * 0.40),
+              roof: mixRGB(basePal.roof, [76, 84, 100], dead * 0.34) }
+          : basePal;
         solid(ctx, pts, b.h, {
-          pal: PALETTES[b.pal] || PALETTES.render,
+          pal: pal,
           roofType: tiny ? 'flat' : b.roof,
           roofH: b.roofH, tone: b.tone, rot: b.rot,
           chimney: detail && b.chimney,
@@ -900,10 +886,13 @@
     const detail = z > 0.72;
     const fine = z > 0.92;
     const sun = R.sun;
-    for (const p of W.props) {
+    const thirst = clamp01(1 - S.d.waterCover * 1.25) * 0.85;
+    const plo = W.lowerBound(W.props, V.y0 - 40), phi = W.lowerBound(W.props, V.y1 + 40);
+    for (let pi = plo; pi < phi; pi++) {
+      const p = W.props[pi];
       if (!fine && (p.kind === 'bin' || p.kind === 'bench')) continue;
       if (p.owner && !S.on[p.owner]) continue;
-      if (p.x < V.x0 - 40 || p.x > V.x1 + 40 || p.y < V.y0 - 40 || p.y > V.y1 + 40) continue;
+      if (p.x < V.x0 - 40 || p.x > V.x1 + 40) continue;
       if (sun.up && detail) {
         if (p.kind === 'shed') {
           const q = quadOf(p.x, p.y, p.w, p.d, p.rot);
@@ -926,8 +915,9 @@
           const [tx, ty] = lift(p.x, p.y, p.h);
           ctx.strokeStyle = '#4a3a2a'; ctx.lineWidth = 1.8;
           ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(tx, ty + p.r*0.4); ctx.stroke();
-          ctx.fillStyle = css(mixRGB([70,120,64], [104,146,72], p.tone));
-          ctx.beginPath(); ctx.arc(tx, ty, p.r, 0, TAU); ctx.fill();
+          const gt = mixRGB(mixRGB([70,120,64], [104,146,72], p.tone), [136, 116, 62], thirst);
+          ctx.fillStyle = css(gt);
+          ctx.beginPath(); ctx.arc(tx, ty, p.r * (1 - thirst * 0.16), 0, TAU); ctx.fill();
         } else if (p.kind === 'shed') {
           solid(ctx, quadOf(p.x, p.y, p.w, p.d, p.rot), p.h, { pal: PALETTES.shed, roofType:'shed', roofH: 5, tone: 0.5 });
         } else if (p.kind === 'parked') {
@@ -1660,8 +1650,9 @@
       if (p.x < V.x0 - 300 || p.x > V.x1 + 300) continue;
       D.push({ y: p.y + 2600, f: (ctx) => {
         const q = lift(p.x, p.y, p.z);
-        const col = p.tint === 'fire' ? '92,68,54' : p.tint === 'coal' ? '112,110,110' : '146,142,132';
-        ctx.fillStyle = 'rgba(' + col + ',' + (p.life * p.life * 0.20) + ')';
+        const col = p.tint === 'fire' ? '92,68,54' : p.tint === 'coal' ? '112,110,110'
+                  : p.tint === 'hearth' ? '208,206,200' : '146,142,132';
+        ctx.fillStyle = 'rgba(' + col + ',' + (p.life * p.life * (p.tint === 'hearth' ? 0.30 : 0.20)) + ')';
         ctx.beginPath(); ctx.arc(q[0], q[1], p.r, 0, TAU); ctx.fill();
       }});
     }
@@ -1678,6 +1669,14 @@
         ctx.fillStyle = 'rgba(255,' + ((120 + e.life*100)|0) + ',60,' + e.life + ')';
         ctx.fillRect(q[0], q[1], 2, 2);
         R.glows.push({ x:q[0], y:q[1], r:11, c:'255,140,50', a:0.4*e.life });
+      }});
+    }
+    for (const d of AGENTS.dust) {
+      if (d.x < V.x0 - 200 || d.x > V.x1 + 200) continue;
+      D.push({ y: d.y + 2400, f: (ctx) => {
+        const q = lift(d.x, d.y, d.z);
+        ctx.fillStyle = 'rgba(186,166,122,' + (d.life * d.life * 0.26) + ')';
+        ctx.beginPath(); ctx.arc(q[0], q[1], d.r, 0, TAU); ctx.fill();
       }});
     }
     for (const l of AGENTS.leaves) {
@@ -1836,6 +1835,66 @@
       ctx.beginPath(); ctx.moveTo(A[0], A[1]);
       ctx.lineTo(mix(A[0], B[0], k), mix(A[1], B[1], k)); ctx.stroke();
     });
+  }
+
+  /* ═══════════════════════ in-world alerts ═══════════════════════
+     The point of the map is that you should not have to read a table to
+     know something is wrong. Anything failing wears a badge above it. */
+
+  function nodeAlert(id, S) {
+    const D = S.d;
+    if (!S.on[id]) return { icon: 'OFF', col: [255, 95, 109], sev: 1 };
+    if (id === 'forest' && S.fire > 0.02) return { icon: 'FIRE', col: [255, 128, 48], sev: 1 };
+    if (id === 'fire' && S.fire > 0.02)   return { icon: 'FIRE', col: [255, 128, 48], sev: 1 };
+    const needsPower = { pump:1, treat:1, factory:1, hospital:1, school:1, tram:1, lights:1,
+                         market:1, recycle:1, station:1, homeA:1, homeB:1, homeC:1 };
+    if (needsPower[id] && D.served < 0.86) return { icon: 'PWR', col: [255, 181, 69], sev: 0.9 };
+    if ((id === 'homeA' || id === 'homeB' || id === 'homeC' || id === 'hospital') && D.waterCover < 0.7)
+      return { icon: 'H2O', col: [63, 208, 232], sev: 0.85 };
+    if (id === 'dam' && S.reservoir < 0.18)  return { icon: 'LOW', col: [63, 208, 232], sev: 0.8 };
+    if (id === 'farms' && S.yield < 0.42)    return { icon: 'CROP', col: [255, 181, 69], sev: 0.7 };
+    if (id === 'orchard' && D.orchIdx < 0.4) return { icon: 'CROP', col: [255, 181, 69], sev: 0.6 };
+    if (id === 'tower' && S.tank < 0.3)      return { icon: 'TANK', col: [63, 208, 232], sev: 0.7 };
+    if (id === 'bees' && D.beeIdx < 0.4)     return { icon: 'BEES', col: [255, 181, 69], sev: 0.6 };
+    if (id === 'marsh' && S.marshHp < 0.45)  return { icon: 'DRY', col: [255, 181, 69], sev: 0.6 };
+    if (id === 'hospital' && S.aqi > 150)    return { icon: 'AQI', col: [255, 138, 74], sev: 0.7 };
+    if (id === 'solar' && D.haze > 0.22)     return { icon: 'HAZE', col: [255, 181, 69], sev: 0.5 };
+    return null;
+  }
+
+  function drawAlerts(ctx, S, R2, z) {
+    const V = R2.viewBounds();
+    const pulse = 0.62 + 0.38 * Math.sin(R2.time * 4.4);
+    ctx.textAlign = 'center';
+    for (const n of W.nodes) {
+      if (n.x < V.x0 || n.x > V.x1 || n.y < V.y0 || n.y > V.y1) continue;
+      const al = nodeAlert(n.id, S);
+      if (!al) continue;
+      const p = lift(n.x, n.y - n.d / 2, n.h + (z > 0.32 ? 52 : 40));
+      const s = 1 / z;
+      const a = (0.55 + 0.45 * pulse) * al.sev;
+
+      // halo so it reads against any background
+      const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], 30 * s);
+      g.addColorStop(0, css(al.col, 0.34 * a)); g.addColorStop(1, css(al.col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(p[0], p[1], 30 * s, 0, TAU); ctx.fill();
+
+      ctx.font = '700 ' + (10 * s) + 'px Inter, sans-serif';
+      const tw = ctx.measureText(al.icon).width;
+      ctx.fillStyle = 'rgba(8,11,18,0.88)';
+      roundRect(ctx, p[0] - tw/2 - 6*s, p[1] - 8*s, tw + 12*s, 16*s, 8*s); ctx.fill();
+      ctx.strokeStyle = css(al.col, a); ctx.lineWidth = 1.6 * s;
+      roundRect(ctx, p[0] - tw/2 - 6*s, p[1] - 8*s, tw + 12*s, 16*s, 8*s); ctx.stroke();
+      ctx.fillStyle = css(al.col, 0.6 + 0.4 * pulse);
+      ctx.fillText(al.icon, p[0], p[1] + 3.4*s);
+
+      // a stem down to the thing itself
+      ctx.strokeStyle = css(al.col, 0.34 * a); ctx.lineWidth = 1.4 * s;
+      ctx.beginPath(); ctx.moveTo(p[0], p[1] + 9*s);
+      ctx.lineTo(p[0], p[1] + 22*s); ctx.stroke();
+    }
+    ctx.textAlign = 'left';
   }
 
   function drawSelection(ctx, R2) {

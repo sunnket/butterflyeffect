@@ -55,8 +55,8 @@
       desc:'The grid drops for nine hours',
       enter:'A busbar fault has taken the central substation offline. Everything electric stops now.',
       leave:'Substation re-energised. Systems restarting in priority order.',
-      run(S) { S.on.grid = false; },
-      undo(S) { S.on.grid = true; SIM.bumpCache(); } },
+      run(S) { S.gridTarget = 0; },
+      undo(S) { S.gridTarget = 1; SIM.bumpCache(); } },
 
     { id:'planting', name:'The Great Planting', icon:'🌱', hours:0, instant:true,
       desc:'40,000 saplings on the western slopes',
@@ -103,7 +103,7 @@
     const S = SIM.state;
     if (S.scen) expire(S, true);
     Object.assign(S.mod, BASE_MOD);
-    S.on.grid = true;
+    S.on.grid = true; S.gridTarget = 1;
     SIM.bumpCache();
     SIM_LOG(S, 'Forcings reset — the valley returns to its ordinary weather.', 'good', 'civic');
   }

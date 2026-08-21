@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
-   ui.js — HUD, hover forecast card, inspector dossier, charts
-   and the cause-and-effect log.
+   ui.js — the thin HUD: vitals, hover forecast card, inspector
+   dossier and event toasts. Everything else is read off the map.
    ═══════════════════════════════════════════════════════════ */
 (function (global) {
   'use strict';
@@ -15,42 +15,24 @@
   ];
   function aqiBand(v) { for (const b of AQI_BANDS) if (v <= b[0]) return b; return AQI_BANDS[5]; }
 
+  /* Four vitals only. Everything else is meant to be read off the map. */
   const METRIC_DEFS = [
-    { k:'power',  label:'Power',      c:'#ffb545', unit:'%',
+    { k:'power',  label:'Power',     c:'#ffb545',
       get:S => S.d.served * 100, bar:S => S.d.served,
-      sub:S => S.d.supply.toFixed(1) + '/' + S.d.demand.toFixed(1) + ' MW', alarm:S => S.d.served < 0.9 },
-    { k:'water',  label:'Water',      c:'#3fd0e8', unit:'%',
+      fmt:v => v.toFixed(0) + '%', alarm:S => S.d.served < 0.9 },
+    { k:'water',  label:'Water',     c:'#3fd0e8',
       get:S => S.d.waterCover * 100, bar:S => S.d.waterCover,
-      sub:S => 'Q ' + S.waterQ.toFixed(0), alarm:S => S.d.waterCover < 0.6 },
-    { k:'air',    label:'Air (AQI)',  c:'#8fb4ff', unit:'',
+      fmt:v => v.toFixed(0) + '%', alarm:S => S.d.waterCover < 0.7 },
+    { k:'air',    label:'Air',       c:'#8fb4ff',
       get:S => S.aqi, bar:S => clamp01(1 - S.aqi / 300), col:S => aqiBand(S.aqi)[1],
-      sub:S => aqiBand(S.aqi)[2], alarm:S => S.aqi > 150, dp:0 },
-    { k:'health', label:'Health',     c:'#54d98c', unit:'',
-      get:S => S.health, bar:S => S.health / 100, alarm:S => S.health < 45, dp:0 },
-    { k:'econ',   label:'Economy',    c:'#ff6f91', unit:'',
-      get:S => S.econ, bar:S => S.econ / 100, alarm:S => S.econ < 30, dp:0 },
-    { k:'happy',  label:'Wellbeing',  c:'#a98bff', unit:'',
-      get:S => S.happy, bar:S => S.happy / 100, alarm:S => S.happy < 45, dp:0 },
-    { k:'pop',    label:'Population',  c:'#d9dde6', unit:'',
-      get:S => S.pop, bar:S => clamp01(S.pop / (SIM.POP0 * 1.3)), fmt:v => Math.round(v).toLocaleString(),
-      sub:S => S.temp.toFixed(0) + '°C · ' + (S.wind * 26).toFixed(0) + ' km/h' }
-  ];
-
-  const CHART_DEFS = [
-    { k:'aqi',    name:'Air quality', c:'#8fb4ff', get:h => h.aqi, min:0, max:300, fmt:v => v.toFixed(0),
-      sub:S => aqiBand(S.aqi)[2] },
-    { k:'power',  name:'Grid',        c:'#ffb545', get:h => h.supply, get2:h => h.demand, min:0, max:50,
-      fmt:v => v.toFixed(1) + ' MW', sub:S => 'demand ' + S.d.demand.toFixed(1) + ' MW' },
-    { k:'res',    name:'Reservoir',   c:'#3fd0e8', get:h => h.res * 100, min:0, max:100, fmt:v => v.toFixed(0) + '%',
-      sub:S => (S.reservoir * SIM.RES_CAP).toFixed(0) + ' ML' },
-    { k:'canopy', name:'Canopy',      c:'#54d98c', get:h => h.canopy * 100, get2:h => h.yield * 100, min:0, max:100,
-      fmt:v => v.toFixed(0) + '%', sub:S => 'harvest ' + (S.yield * 100).toFixed(0) + '%' },
-    { k:'happy',  name:'Wellbeing',   c:'#a98bff', get:h => h.happy, get2:h => h.health, min:0, max:100,
-      fmt:v => v.toFixed(0), sub:S => 'health ' + S.health.toFixed(0) }
+      fmt:v => v.toFixed(0), alarm:S => S.aqi > 150 },
+    { k:'happy',  label:'Wellbeing', c:'#a98bff',
+      get:S => S.happy, bar:S => S.happy / 100,
+      fmt:v => v.toFixed(0), alarm:S => S.happy < 50 }
   ];
 
   const UI = {
-    tipEl: null, chartCanvases: {}, metricEls: {}, lastLogLen: -1, chartTick: 0,
+    tipEl: null, metricEls: {}, _lastEvent: null,
 
     /* ─────────────────────────── build ─────────────────────────── */
     build() {
@@ -61,9 +43,9 @@
       METRIC_DEFS.forEach(m => {
         const e = el('div', 'metric');
         e.style.setProperty('--c', m.c);
-        e.innerHTML = '<div class="mlabel"><span class="mdot"></span>' + m.label + '</div>'
-                    + '<div class="mval"><span class="v">–</span><span class="munit">' + (m.unit || '') + '</span></div>'
-                    + '<div class="mtrend"></div><div class="mbar"></div>';
+        e.innerHTML = '<div class="mlabel"><span class="mdot"></span>' + m.label
+                    + '<span class="mval"><span class="v">–</span></span></div>'
+                    + '<div class="mbar"></div>';
         mw.appendChild(e);
         this.metricEls[m.k] = { root: e, v: e.querySelector('.v'), trend: e.querySelector('.mtrend'),
                                 bar: e.querySelector('.mbar'), dot: e.querySelector('.mdot') };
@@ -99,31 +81,18 @@
         ll.appendChild(b);
       });
 
-      // legend
-      const CATS = [['power','Energy'],['water','Water'],['nature','Living systems'],
-                    ['econ','Economy'],['civic','Civic']];
-      const lg = $('#legendList');
-      CATS.forEach(([k, n]) => {
-        const count = W.nodes.filter(x => x.cat === k).length;
-        const li = el('li');
-        li.innerHTML = '<span class="ldot" style="background:' + RENDER.CAT_COLOR[k] + ';color:'
-                     + RENDER.CAT_COLOR[k] + '"></span>' + n + '<span class="lct">' + count + '</span>';
-        lg.appendChild(li);
-      });
-
-      // charts
-      const cw = $('#charts');
-      CHART_DEFS.forEach(c => {
-        const d = el('div', 'chart');
-        d.style.setProperty('--c', c.c);
-        d.innerHTML = '<div class="chead"><span class="cname">' + c.name + '</span><span class="cval">–</span></div>'
-                    + '<div class="csub">–</div><canvas></canvas>';
-        cw.appendChild(d);
-        this.chartCanvases[c.k] = { cv: d.querySelector('canvas'), val: d.querySelector('.cval'),
-                                    sub: d.querySelector('.csub'), def: c };
-      });
-
+      const rt = $('#railToggle');
+      rt.onclick = () => this.toggleRail();
+      // the rail starts open, so the toasts start clear of it
+      $('#toasts').classList.add('shifted');
       $('#btnCloseInspect').onclick = () => this.select(null);
+    },
+
+    toggleRail() {
+      const r = $('#rail'), t = $('#railToggle'), to = $('#toasts');
+      const hidden = r.classList.toggle('hidden');
+      t.classList.toggle('show', hidden);
+      to.classList.toggle('shifted', !hidden);
     },
 
     toggleLayer(k) {
@@ -150,37 +119,19 @@
       $('#wSub').textContent = (S.wind * 26).toFixed(0) + ' km/h · ' + S.temp.toFixed(0) + '°C · '
                   + rainMM.toFixed(1) + ' mm/h';
 
-      // metrics
-      const H = SIM.history, back = H.length > 24 ? H[H.length - 24] : null;
+      // vitals
       METRIC_DEFS.forEach(m => {
         const e = this.metricEls[m.k];
         const v = m.get(S);
-        e.v.textContent = m.fmt ? m.fmt(v) : v.toFixed(m.dp === undefined ? 0 : m.dp);
+        e.v.textContent = m.fmt(v);
         const col = m.col ? m.col(S) : m.c;
         e.root.style.setProperty('--c', col);
         e.bar.style.width = (clamp01(m.bar(S)) * 100) + '%';
         e.root.classList.toggle('alarm', !!(m.alarm && m.alarm(S)));
-        if (back) {
-          const prev = m.k === 'pop' ? back.pop : m.k === 'air' ? back.aqi : m.k === 'power' ? back.served * 100
-                     : m.k === 'water' ? null : m.k === 'health' ? back.health : m.k === 'econ' ? back.econ
-                     : m.k === 'happy' ? back.happy : null;
-          if (prev !== null && prev !== undefined) {
-            const d = v - prev;
-            const rising = d > (Math.abs(v) * 0.004 + 0.15);
-            const falling = d < -(Math.abs(v) * 0.004 + 0.15);
-            const goodUp = m.k !== 'air';
-            e.trend.textContent = rising ? '▲' : falling ? '▼' : '·';
-            e.trend.style.color = (rising === goodUp && (rising || falling)) ? '#54d98c'
-                               : (rising || falling) ? '#ff5f6d' : '#5f6f8a';
-          }
-        }
       });
 
-      // charts, ~12 fps
-      this.chartTick -= dtReal;
-      if (this.chartTick <= 0) { this.chartTick = 0.08; this.drawCharts(S); }
-
       if (SIM.eventsDirty) { this.renderLog(); SIM.eventsDirty = false; }
+      this.ageToasts(dtReal);
 
       // scenario highlight
       document.querySelectorAll('.scen').forEach(b => b.classList.toggle('live', b.dataset.id === S.scen));
@@ -215,73 +166,30 @@
       c.beginPath(); c.arc(cx, cy, r - 6, -Math.PI / 2, -Math.PI / 2 + S.reservoir * Math.PI * 2); c.stroke();
     },
 
-    /* ─────────────────────────── charts ─────────────────────────── */
-    drawCharts(S) {
-      const H = SIM.history;
-      if (H.length < 2) return;
-      const N = Math.min(H.length, 320);
-      const slice = H.slice(H.length - N);
-      Object.keys(this.chartCanvases).forEach(k => {
-        const o = this.chartCanvases[k], def = o.def, cv = o.cv;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const w = cv.clientWidth, h = cv.clientHeight;
-        if (!w || !h) return;
-        if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
-        const c = cv.getContext('2d');
-        c.setTransform(dpr, 0, 0, dpr, 0, 0);
-        c.clearRect(0, 0, w, h);
-
-        const X = i => (i / (N - 1)) * w;
-        const Y = v => h - ((v - def.min) / (def.max - def.min)) * (h - 4) - 2;
-
-        // gridlines
-        c.strokeStyle = 'rgba(255,255,255,.055)'; c.lineWidth = 1;
-        for (let g = 1; g < 4; g++) {
-          const y = (h / 4) * g;
-          c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke();
-        }
-
-        // secondary series
-        if (def.get2) {
-          c.strokeStyle = 'rgba(255,255,255,.30)'; c.lineWidth = 1.1;
-          c.setLineDash([3, 3]);
-          c.beginPath();
-          slice.forEach((s, i) => { const y = Y(def.get2(s)); i ? c.lineTo(X(i), y) : c.moveTo(X(i), y); });
-          c.stroke(); c.setLineDash([]);
-        }
-
-        // area + line
-        const grd = c.createLinearGradient(0, 0, 0, h);
-        grd.addColorStop(0, def.c + '55'); grd.addColorStop(1, def.c + '00');
-        c.beginPath();
-        slice.forEach((s, i) => { const y = Y(def.get(s)); i ? c.lineTo(X(i), y) : c.moveTo(X(i), y); });
-        const last = Y(def.get(slice[slice.length - 1]));
-        c.lineTo(w, h); c.lineTo(0, h); c.closePath();
-        c.fillStyle = grd; c.fill();
-
-        c.beginPath();
-        slice.forEach((s, i) => { const y = Y(def.get(s)); i ? c.lineTo(X(i), y) : c.moveTo(X(i), y); });
-        c.strokeStyle = def.c; c.lineWidth = 1.7; c.lineJoin = 'round'; c.stroke();
-
-        c.fillStyle = def.c;
-        c.beginPath(); c.arc(w - 1.5, last, 2.4, 0, Math.PI * 2); c.fill();
-
-        o.val.textContent = def.fmt(def.get(slice[slice.length - 1]));
-        o.sub.textContent = def.sub ? def.sub(S) : '';
-      });
-    },
-
-    /* ─────────────────────────── event log ─────────────────────────── */
+    /* ── events surface as transient toasts, not a permanent table ── */
+    toasts: [],
     renderLog() {
-      const ul = $('#eventLog');
-      ul.innerHTML = '';
-      SIM.events.slice(0, 40).forEach(e => {
-        const li = el('li', 'sev-' + e.sev);
-        li.style.setProperty('--c', RENDER.CAT_COLOR[e.cat] || '#5f6f8a');
-        li.innerHTML = '<span class="ltime">D' + e.day + ' ' + e.stamp + '</span><span class="ltxt">' + e.text + '</span>';
-        ul.appendChild(li);
-      });
-      $('#logCount').textContent = SIM.events.length + ' event' + (SIM.events.length === 1 ? '' : 's');
+      const box = $('#toasts');
+      const latest = SIM.events[0];
+      if (!latest || latest === this._lastEvent) return;
+      this._lastEvent = latest;
+      const li = el('div', 'toast sev-' + latest.sev);
+      li.style.setProperty('--c', RENDER.CAT_COLOR[latest.cat] || '#5f6f8a');
+      li.innerHTML = '<span class="ttime">' + latest.stamp + '</span><span>' + latest.text + '</span>';
+      box.appendChild(li);
+      this.toasts.push({ el: li, age: 0 });
+      while (this.toasts.length > 4) {
+        const old = this.toasts.shift();
+        old.el.remove();
+      }
+    },
+    ageToasts(dt) {
+      for (let i = this.toasts.length - 1; i >= 0; i--) {
+        const t = this.toasts[i];
+        t.age += dt;
+        if (t.age > 7 && !t.el.classList.contains('fade')) t.el.classList.add('fade');
+        if (t.age > 7.6) { t.el.remove(); this.toasts.splice(i, 1); }
+      }
     },
     flashLog() { SIM.eventsDirty = true; },
 

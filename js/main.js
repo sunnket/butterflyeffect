@@ -95,9 +95,10 @@
         }
         if (!self.started) return;
         const wp = RENDER.s2w(e.clientX, e.clientY);
-        const inDock = e.clientY > window.innerHeight - 216 || e.clientY < 70
-                    || (e.clientX < 262 && e.clientY < window.innerHeight - 216)
-                    || (e.clientX > window.innerWidth - 356 && !$('#inspector').classList.contains('closed'));
+        const railOpen = !$('#rail').classList.contains('hidden');
+        const inDock = e.clientY < 70
+                    || (railOpen && e.clientX < 262)
+                    || (e.clientX > window.innerWidth - 350 && !$('#inspector').classList.contains('closed'));
         self.hover = inDock ? null : RENDER.hitTest(wp.x, wp.y);
         RENDER.hover = self.hover;
         cv.classList.toggle('pointing', !!self.hover);
@@ -150,7 +151,7 @@
         else if (k === 'a') UI.toggleLayer('haze');
         else if (k === 'p') UI.toggleLayer('people');
         else if (k === 'b') UI.toggleLayer('labels');
-        else if (k === 'l') { const r = $('#rail'); r.style.display = r.style.display === 'none' ? '' : 'none'; }
+        else if (k === 'l') UI.toggleRail();
         else if (k === 'x') {
           const n = RENDER.selected || self.hover;
           if (n) { SIM.toggle(n.id); UI.flashLog(); if (RENDER.selected) UI.buildInspector(RENDER.selected); }
